@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Post to Mastodon</title>
+</head>
+<body>
+<h1>Post a Message to Mastodon</h1>
+<form th:action="@{/post-to-mastodon}" method="post">
+    <label>
+        <textarea name="message" placeholder="Your message..." required></textarea>
+    </label>
+    <button type="submit">Post Message</button>
+</form>
+</body>
+</html>
+

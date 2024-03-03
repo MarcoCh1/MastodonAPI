@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Enter Authorization Code</title>
+</head>
+<body>
+<h1>Enter the Authorization Code from Mastodon</h1>
+<form th:action="@{/process-code}" method="post">
+    <label for="code">Authorization Code:</label>
+    <input type="text" id="code" name="code" required>
+    <button type="submit">Submit</button>
+</form>
+</body>
+</html>
+
