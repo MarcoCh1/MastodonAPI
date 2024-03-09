@@ -4,9 +4,12 @@
     <title>Home</title>
     <script type="text/javascript">
         function addMastodonAccount() {
-            // Open Mastodon authorization URL in a new tab
-            window.open('https://mastodon.social/oauth/authorize?client_id=BSWItFq7Qb0B6Xhe0Ok8fnnhNPuMehvW8Zs8OYx06yY&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope=read write', '_blank');
-            // Redirect the current page to the enter-code.html
+            // open mastodon page to let user sign in and authorize
+            // if user is already signed in it should just ask them to authorize
+            // right now application id is hardcoded in url which will be changed in the future
+            window.open('https://mastodon.social/oauth/authorize?client_id=0DIHKu7BCcGb9wuPLXIa-y4E7I9-TefyM9X5Q0Xym7w&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope=read write', '_blank');
+
+            // opens enter-code page
             window.location.href = '/enter-code';
         }
     </script>
