@@ -4,13 +4,12 @@
     <title>Home</title>
     <script type="text/javascript">
         function addMastodonAccount() {
-            // open mastodon page to let user sign in and authorize
-            // if user is already signed in it should just ask them to authorize
-            // right now application id is hardcoded in url which will be changed in the future
-            window.open('https://mastodon.social/oauth/authorize?client_id=0DIHKu7BCcGb9wuPLXIa-y4E7I9-TefyM9X5Q0Xym7w&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope=read write', '_blank');
+            // Correctly configure the URL for OAuth authorization including the correct redirect_uri
+            var authUrl = 'https://mastodon.social/oauth/authorize?client_id=0DIHKu7BCcGb9wuPLXIa-y4E7I9-TefyM9X5Q0Xym7w&response_type=code&redirect_uri=http://localhost:8080/callback&scope=read write';
 
-            // opens enter-code page
-            window.location.href = '/enter-code';
+            // Directly navigate to the authorization URL without opening a new window
+            // This assumes the user flow is managed through redirects
+            window.location.href = authUrl;
         }
     </script>
 </head>

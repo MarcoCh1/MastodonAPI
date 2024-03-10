@@ -5,7 +5,7 @@
 </head>
 <body>
 <h1>Post a Message to Mastodon</h1>
-<form th:action="@{/post-to-mastodon}" method="post">
+<form method="post" th:action="@{/submit-post}">
     <label>
         <textarea name="message" placeholder="Your message..." required></textarea>
     </label>

@@ -2,17 +2,19 @@ package edu.missouristate.mastodonapijavamaster;
 
 import jakarta.servlet.http.HttpSession;
 import org.json.JSONObject;
+import org.springframework.http.*;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.ModelAndView;
 
-import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.IOException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 
 @Controller
 public class MastodonController {
@@ -20,110 +22,96 @@ public class MastodonController {
     // application id and secret. will have to find somewhere better to put these
     private static final String CLIENT_ID = "0DIHKu7BCcGb9wuPLXIa-y4E7I9-TefyM9X5Q0Xym7w";
     private static final String CLIENT_SECRET = "gT1Hyha5yI2ZHRk3BmUA3YkiuW2UFCC_e-JVDaM8rHE";
-    private static final String REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob"; // will prob need to change
+    private static final String REDIRECT_URI = "http://localhost:8080/callback";
+//    private static final String REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob"; // will prob need to change
 
-    // goes to enter-code page after index page button click
-    @GetMapping("/enter-code")
-    public String enterCode() {
-        return "enter-code";
+    @GetMapping("/callback")
+    public String handleCallback(@RequestParam("code") String code, HttpSession session) {
+        String accessToken = getAccessToken(code);
+        session.setAttribute("accessToken", accessToken); // Store the access token in the session
+        return "redirect:/post-message"; // Redirect to the page for submitting a post
     }
 
-    // attempts to get an access token with the code the user puts in
-    // will stay on enter-code screen until correct code is entered
-    @PostMapping("/process-code")
-    public ModelAndView processAuthorizationCode(@RequestParam("code") String code, HttpSession session) {
-        ModelAndView modelAndView = new ModelAndView();
-        try {
-            String accessToken = exchangeAuthorizationCodeForAccessToken(code);
 
-            session.setAttribute("access_token", accessToken);
+    private String getAccessToken(String authorizationCode) {
+        RestTemplate restTemplate = new RestTemplate();
+        String tokenEndpoint = "https://mastodon.social/oauth/token";
 
-            modelAndView.setViewName("redirect:/post-message");
-        } catch (Exception e) {
-            modelAndView.setViewName("redirect:/enter-code");
-            modelAndView.addObject("error", "Failed to process the authorization code. Please try again.");
-        }
-        return modelAndView;
-    }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-    // sends in url with application id, secret, and redirect URI parameters
-    // if url works, returns back the access token needed to authorize account
-    private String exchangeAuthorizationCodeForAccessToken(String authorizationCode) throws IOException {
-        String tokenUrl = "https://mastodon.social/oauth/token";
-        String params = "client_id=" + CLIENT_ID +
+        String formData = "client_id=" + CLIENT_ID +
                 "&client_secret=" + CLIENT_SECRET +
                 "&grant_type=authorization_code" +
-                "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI, "UTF-8") +
-                "&code=" + authorizationCode;
+                "&code=" + authorizationCode +
+                "&redirect_uri=" + URLEncoder.encode(REDIRECT_URI, StandardCharsets.UTF_8);
 
-        URL url = new URL(tokenUrl);
-        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod("POST");
-        con.setDoOutput(true);
+        HttpEntity<String> request = new HttpEntity<>(formData, headers);
 
-        // not exactly sure how this works, but I found it and it works
-        con.getOutputStream().write(params.getBytes());
+        System.out.println("Sending access token request with data: " + formData); // Debugging statement
 
-        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-        String inputLine;
-        StringBuilder response = new StringBuilder();
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(tokenEndpoint, request, String.class);
+            System.out.println("Received response: " + response.getBody()); // Debugging statement
 
-        while ((inputLine = in.readLine()) != null) {
-            response.append(inputLine);
+            JSONObject jsonResponse = new JSONObject(response.getBody());
+            String accessToken = jsonResponse.getString("access_token");
+            System.out.println("Extracted access token: " + accessToken); // Debugging statement
+            return accessToken;
+        } catch (Exception e) {
+            System.out.println("Error during token request: " + e.getMessage()); // Debugging statement
+            e.printStackTrace(); // Consider more sophisticated error handling for production
+            return null;
         }
-        in.close();
-
-        JSONObject jsonResponse = new JSONObject(response.toString());
-        return jsonResponse.getString("access_token");
     }
 
-    // returns post-message.html if access token is not null
-    @GetMapping("/post-message")
-    public String showPostMessagePage(HttpSession session, Model model) {
-
-        String accessToken = (String) session.getAttribute("access_token");
-        if (accessToken == null) {
-
-            return "redirect:/";
-        }
-
-
+    @RequestMapping("/post-message")
+    public String showPostMessageForm() {
+        // This method simply returns the view that contains the form for posting a message
         return "post-message";
     }
 
-    // checks if user access token is exists and is valid
-    // if so user can post to mastodon using text box.
-    @PostMapping("/post-to-mastodon")
-    public ModelAndView postToMastodon(@RequestParam("message") String message, HttpSession session) {
-        ModelAndView modelAndView = new ModelAndView("result");
+    @PostMapping("/submit-post")
+    public ModelAndView submitPostToMastodon(@RequestParam("message") String message, HttpSession session) {
+        ModelAndView modelAndView = new ModelAndView();
+        String accessToken = (String) session.getAttribute("accessToken"); // Retrieve the access token from the session
+
+        if (accessToken == null) {
+            modelAndView.setViewName("redirect:/"); // Redirect back to the home or login page if no access token
+            modelAndView.addObject("error", "No access token available. Please authorize first.");
+            return modelAndView;
+        }
+
         try {
-            String accessToken = (String) session.getAttribute("access_token");
-            if (accessToken == null) {
-                throw new Exception("No access token available. Please authorize first.");
-            }
             postMessageToMastodon(message, accessToken);
+            modelAndView.setViewName("result"); // Assuming you have a "result.html" to show success
             modelAndView.addObject("message", "Message posted to Mastodon successfully!");
         } catch (Exception e) {
-            modelAndView.setViewName("error");
+            modelAndView.setViewName("error"); // Assuming you have an "error.html" to show errors
             modelAndView.addObject("error", "Failed to post message to Mastodon: " + e.getMessage());
         }
+
         return modelAndView;
     }
 
-    // can only post to the user's .social domain
-    private void postMessageToMastodon(String message, String accessToken) throws IOException {
-        URL postUrl = new URL("https://mastodon.social/api/v1/statuses");
-        HttpURLConnection postCon = (HttpURLConnection) postUrl.openConnection();
-        postCon.setRequestMethod("POST");
-        postCon.setRequestProperty("Authorization", "Bearer " + accessToken);
-        postCon.setDoOutput(true);
-        String postParams = "status=" + URLEncoder.encode(message, "UTF-8");
-        postCon.getOutputStream().write(postParams.getBytes());
 
-        int postResponseCode = postCon.getResponseCode();
-        if (postResponseCode != HttpURLConnection.HTTP_OK) {
-            throw new RuntimeException("Failed to post to Mastodon, response code: " + postResponseCode);
+    private void postMessageToMastodon(String message, String accessToken) throws IOException {
+        // Assuming you've adjusted this method to correctly use RestTemplate or similar
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBearerAuth(accessToken); // Use the access token for authorization
+
+        String postParams = "status=" + URLEncoder.encode(message, StandardCharsets.UTF_8);
+
+        HttpEntity<String> request = new HttpEntity<>(postParams, headers);
+
+        ResponseEntity<String> response = restTemplate.postForEntity("https://mastodon.social/api/v1/statuses", request, String.class);
+
+        if (response.getStatusCode() != HttpStatus.OK) {
+            throw new RuntimeException("Failed to post to Mastodon, response code: " + response.getStatusCode());
         }
     }
+
 
 }
